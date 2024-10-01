@@ -3,7 +3,6 @@ const http = require("http");
 const { Server } = require("socket.io");
 const dotenv = require("dotenv");
 
-
 dotenv.config();
 const app = express();
 const server = http.createServer(app);
@@ -32,7 +31,15 @@ io.on("connection", (socket) => {
       message: `${reactorName}`,
     });
   });
-  socket.on("dissconnect", () => {
+
+  socket.on("updateRideStatus", ({ cardSender, status, reactorName }) => {
+    console.log(`${reactorName} updated the ride status to ${status}`);
+    io.to(cardSender).emit("rideStatusUpdate", {
+      message: `${reactorName} has updated the ride status to: ${status}`,
+      status: status,
+    });
+  });
+  socket.on("disconnect", () => {
     console.log(`user ${socket.id} disconnected`);
   });
 });

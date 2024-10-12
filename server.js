@@ -82,7 +82,7 @@ io.on("connection", (socket) => {
     }
 
     io.to(cardSender).emit("notifyReaction", {
-      message: `${reactorName} has accepted your ride`,
+      message: `${reactorName}`,
     });
   });
 

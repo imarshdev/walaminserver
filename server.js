@@ -48,7 +48,6 @@ io.on("connection", (socket) => {
   );
   socket.emit("pendingRides", pendingRides);
 
-
   // Handle new ride emission
   socket.on("sendCard", (cardData) => {
     console.log(`New ride from ${socket.id}: `, cardData);
@@ -69,7 +68,9 @@ io.on("connection", (socket) => {
 
   // Handle ride reaction (acceptance)
   socket.on("reaction", ({ cardSender, reaction, reactorName }) => {
-    console.log(`Reaction from ${reactorName}: accepted ${cardSender}'s ride`);
+    console.log(
+      `Reaction from ${reactorName.userName}: accepted ${cardSender}'s ride`
+    );
 
     // Update ride status to accepted
     const rides = readFile(ridesFilePath);
@@ -82,13 +83,13 @@ io.on("connection", (socket) => {
     }
 
     io.to(cardSender).emit("notifyReaction", {
-      message: `${reactorName}`,
+      message: reactorName,
     });
   });
 
   // Handle ride status updates
   socket.on("updateRideStatus", ({ cardSender, status, reactorName }) => {
-    console.log(`${reactorName} updated the ride status to ${status}`);
+    console.log(`${reactorName.userName} updated the ride status to ${status}`);
 
     const rides = readFile(ridesFilePath);
     const rideIndex = rides.findIndex((ride) => ride.sender === cardSender);
@@ -118,8 +119,9 @@ io.on("connection", (socket) => {
     }
 
     io.to(cardSender).emit("rideStatusUpdate", {
-      message: `${reactorName} has updated the ride status to: ${status}`,
+      message: `${reactorName.userName} has updated the ride status to: ${status}`,
       status,
+      reactorDetails: reactorName,
     });
   });
 

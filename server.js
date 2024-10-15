@@ -64,6 +64,34 @@ io.on("connection", (socket) => {
     writeFile(ridesFilePath, rides);
 
     io.emit("recieveCard", ride);
+
+    // Start a 1-minute timer for this ride
+    const rideTimeout = setTimeout(() => {
+      const rides = readFile(ridesFilePath);
+      const rideIndex = rides.findIndex(
+        (r) => r.sender === socket.id && r.status === "pending"
+      );
+
+      if (rideIndex !== -1) {
+        // Notify the user that no rider is available
+        io.to(socket.id).emit("rideTimeout", {
+          message: "We are sorry, no rider available at this time.",
+        });
+
+        // Remove the ride from the list of pending rides
+        rides.splice(rideIndex, 1);
+        writeFile(ridesFilePath, rides);
+
+        // Stop emitting this ride to others
+        io.emit(
+          "pendingRides",
+          rides.filter((ride) => ride.status === "pending")
+        );
+      }
+    }, 60000); // 1 minute (60000 ms)
+
+    // Store the timeout so we can clear it later if the ride is accepted
+    ride.timeout = rideTimeout;
   });
 
   // Handle ride reaction (acceptance)
@@ -72,19 +100,23 @@ io.on("connection", (socket) => {
       `Reaction from ${reactorName.userName}: accepted ${cardSender}'s ride`
     );
 
-    // Update ride status to accepted
     const rides = readFile(ridesFilePath);
     const rideIndex = rides.findIndex((ride) => ride.sender === cardSender);
 
     if (rideIndex !== -1) {
+      // Clear the timeout since the ride has been accepted
+      clearTimeout(rides[rideIndex].timeout);
+
+      // Update ride status to accepted
       rides[rideIndex].status = "accepted";
       rides[rideIndex].acceptedBy = reactorName;
+      delete rides[rideIndex].timeout; // Remove the timeout reference
       writeFile(ridesFilePath, rides);
-    }
 
-    io.to(cardSender).emit("notifyReaction", {
-      message: reactorName,
-    });
+      io.to(cardSender).emit("notifyReaction", {
+        message: reactorName,
+      });
+    }
   });
 
   // Handle ride status updates
@@ -96,10 +128,17 @@ io.on("connection", (socket) => {
 
     if (rideIndex !== -1) {
       if (status === "Ride Ended" || status === "Ride Cancelled") {
+        // Clear the timeout if it exists
+        if (rides[rideIndex].timeout) {
+          clearTimeout(rides[rideIndex].timeout);
+        }
+
         // Move ride to completed/cancelled rides and delete from current rides
         const completedRides = readFile(completedRidesFilePath);
         const completedRide = {
           ...rides[rideIndex],
+          contact: rides[rideIndex].contact, // Include contact
+          username: rides[rideIndex].username, // Include username
           status,
           completedBy: reactorName,
           completedAt: new Date().toISOString(),
@@ -111,6 +150,9 @@ io.on("connection", (socket) => {
         // Remove the ride from active rides
         rides.splice(rideIndex, 1);
         writeFile(ridesFilePath, rides);
+
+        // Emit the new completed ride to the user
+        io.to(cardSender).emit("newCompletedRide", completedRide);
       } else {
         // Just update the status if it's not ending/cancelling the ride
         rides[rideIndex].status = status;
